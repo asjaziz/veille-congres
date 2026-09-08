@@ -1,0 +1,18 @@
+[
+  {
+    "titre": "International Conference on Eco Smart Materials",
+    "date": "16/06/2026",
+    "lieu": "Kénitra, Maroc",
+    "topics": ["Matériaux", "Technologies"],
+    "lien": "https://www.uit.ac.ma/category/evenement/",
+    "source": "UIT"
+  },
+  {
+    "titre": "International Congress of the Astronomical Youth",
+    "date": "09/07/2026",
+    "lieu": "Marrakech, Maroc",
+    "topics": ["Astronomie", "Jeunesse"],
+    "lien": "https://www.uca.ma/fr/events",
+    "source": "UCA"
+  }
+]
