@@ -209,7 +209,7 @@ def scrape_um5():
             "source": "UM5"                     # Sigle de la source
         })
     return events
-def scrape_um5():
+def scrape_SIC():
     """  site international pour annoncer une conférence"""
     events = []
     base_url = "https://portal.sciencesconf.org/browse/search"  # L'adresse du site
