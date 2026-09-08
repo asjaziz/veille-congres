@@ -1,14 +1,7 @@
 """
 Script de veille automatique des événements académiques marocains.
 Sources : UIT, ENS UMI, UCA, USMBA
-Sortie : veille_congres.json (pour gadget Blogger) + veille_congres.md (optionnel)
-
-Champs extraits :
-- titre
-- date (date de tenue si trouvable, sinon date de publication)
-- lieu
-- topics (thematiques)
-- lien (annonce officielle)
+Sortie : veille_congres.json (pour gadget Blogger)
 """
 
 import requests
@@ -26,26 +19,10 @@ HEADERS = {
 TODAY = datetime.now()
 
 SITES = [
-    {
-        "nom": "UIT",
-        "url_list": "https://www.uit.ac.ma/category/evenement/",
-        "detail_base": ""
-    },
-    {
-        "nom": "ENS UMI",
-        "url_list": "https://www.ens.umi.ac.ma/evenements/liste/",
-        "detail_base": ""
-    },
-    {
-        "nom": "UCA",
-        "url_list": "https://www.uca.ma/fr/events",
-        "detail_base": ""
-    },
-    {
-        "nom": "USMBA",
-        "url_list": "https://www.usmba.ac.ma/~usmba2/",
-        "detail_base": ""
-    }
+    {"nom": "UIT", "url_list": "https://www.uit.ac.ma/category/evenement/"},
+    {"nom": "ENS UMI", "url_list": "https://www.ens.umi.ac.ma/evenements/liste/"},
+    {"nom": "UCA", "url_list": "https://www.uca.ma/fr/events"},
+    {"nom": "USMBA", "url_list": "https://www.usmba.ac.ma/~usmba2/"}
 ]
 
 
@@ -74,10 +51,7 @@ def extract_topics_from_text(text):
         "innovation", "économie de la connaissance",
         "ingénierie", "technologie", "sommet"
     ]
-    found = []
-    for kw in keywords:
-        if kw in text:
-            found.append(kw.title())
+    found = [kw.title() for kw in keywords if kw in text]
     seen = set()
     unique = []
     for t in found:
@@ -92,93 +66,148 @@ def get_text_safe(tag):
 
 
 def scrape_uit():
+    """Scrape UIT - va sur chaque page individuelle pour récupérer le vrai lien."""
     events = []
     try:
         resp = requests.get(SITES[0]["url_list"], headers=HEADERS, timeout=15)
         soup = BeautifulSoup(resp.text, "html.parser")
         articles = soup.find_all("article") or soup.find_all("div", class_=lambda c: c and "post" in c.lower() if c else False)
 
-        for article in articles[:20]:
+        for article in articles[:15]:  # Limite à 15 pour éviter trop de requêtes
             title_tag = article.find("h2") or article.find("h3")
             if not title_tag:
                 continue
-            title = get_text_safe(title_tag)
+            
+            # LIEN de la page liste
             link_tag = title_tag.find("a", href=True)
-            link = link_tag["href"] if link_tag else SITES[0]["url_list"]
+            if not link_tag:
+                continue
+            
+            lien_liste = link_tag["href"]
+            title = get_text_safe(title_tag)
 
-            date_tag = article.find("time") or article.find("span", class_=lambda c: c and "date" in c.lower() if c else False)
-            pub_date_str = get_text_safe(date_tag)
-            pub_date = parse_date_french(pub_date_str)
+            # ALLER SUR LA PAGE INDIVIDUELLE pour récupérer le vrai lien
+            try:
+                resp_detail = requests.get(lien_liste, headers=HEADERS, timeout=10)
+                soup_detail = BeautifulSoup(resp_detail.text, "html.parser")
+                
+                # Le vrai lien est souvent dans un bouton "Read more" ou dans le permalink
+                permalink = soup_detail.find("link", rel="canonical")
+                if permalink and permalink.get("href"):
+                    lien_final = permalink["href"]
+                else:
+                    # Sinon, utiliser l'URL de la page elle-même
+                    lien_final = lien_liste
+                
+                # Date sur la page détail
+                date_tag = soup_detail.find("time") or soup_detail.find("span", class_=lambda c: c and "date" in c.lower() if c else False)
+                date_str = get_text_safe(date_tag)
+                pub_date = parse_date_french(date_str)
 
-            summary = get_text_safe(article.find("p")) or get_text_safe(article)
-            topics = extract_topics_from_text(summary)
-            lieu = "Non spécifié"
+                # Topics
+                content = soup_detail.find("div", class_=lambda c: c and ("content" in c.lower() or "entry" in c.lower()) if c else False)
+                summary = get_text_safe(content) if content else get_text_safe(soup_detail)
+                topics = extract_topics_from_text(summary)
+                lieu = "Non spécifié"
 
-            if is_future(pub_date):
+                if is_future(pub_date):
+                    events.append({
+                        "titre": title,
+                        "date": pub_date.strftime("%d/%m/%Y") if pub_date else "Non spécifié",
+                        "lieu": lieu,
+                        "topics": topics,
+                        "lien": lien_final,  # ← VRAI LIEN INDIVIDUEL !
+                        "source": "UIT",
+                        "visuel_url": ""
+                    })
+            except Exception as e:
+                print(f"[UIT détail] Erreur pour {lien_liste}: {e}")
+                # En cas d'erreur, utiliser le lien de la liste
                 events.append({
                     "titre": title,
-                    "date": pub_date.strftime("%d/%m/%Y") if pub_date else "Non spécifié",
-                    "lieu": lieu,
-                    "topics": topics,
-                    "lien": link,
+                    "date": "Non spécifié",
+                    "lieu": "Non spécifié",
+                    "topics": ["Non spécifié"],
+                    "lien": lien_liste,
                     "source": "UIT",
                     "visuel_url": ""
                 })
+                
     except Exception as e:
         print(f"[UIT] Erreur: {e}")
     return events
 
 
 def scrape_uca():
+    """Scrape UCA - va sur chaque page individuelle."""
     events = []
     try:
         resp = requests.get(SITES[2]["url_list"], headers=HEADERS, timeout=15)
         soup = BeautifulSoup(resp.text, "html.parser")
         items = soup.find_all("div", class_=lambda c: c and ("event" in c.lower() or "post" in c.lower()) if c else False)
 
-        for item in items[:20]:
+        for item in items[:15]:
             title_tag = item.find("h3") or item.find("h2")
             if not title_tag:
                 continue
-            title = get_text_safe(title_tag)
+            
             link_tag = item.find("a", href=True)
-            link = link_tag["href"] if link_tag else SITES[2]["url_list"]
+            if not link_tag:
+                continue
+            
+            lien_liste = link_tag["href"]
+            title = get_text_safe(title_tag)
 
-            date_tag = item.find("span", class_=lambda c: c and "date" in c.lower() if c else False)
-            date_str = get_text_safe(date_tag) if date_tag else ""
-            date_obj = parse_date_french(date_str)
+            try:
+                resp_detail = requests.get(lien_liste, headers=HEADERS, timeout=10)
+                soup_detail = BeautifulSoup(resp_detail.text, "html.parser")
+                
+                permalink = soup_detail.find("link", rel="canonical")
+                lien_final = permalink["href"] if permalink and permalink.get("href") else lien_liste
+                
+                date_tag = soup_detail.find("span", class_=lambda c: c and "date" in c.lower() if c else False)
+                date_str = get_text_safe(date_tag) if date_tag else ""
+                date_obj = parse_date_french(date_str)
 
-            summary = get_text_safe(item.find("p")) or get_text_safe(item)
-            topics = extract_topics_from_text(summary)
-            lieu = "Non spécifié"
+                content = soup_detail.find("div", class_=lambda c: c and ("content" in c.lower() or "entry" in c.lower()) if c else False)
+                summary = get_text_safe(content) if content else get_text_safe(soup_detail)
+                topics = extract_topics_from_text(summary)
+                lieu = "Non spécifié"
 
-            if is_future(date_obj):
-                events.append({
-                    "titre": title,
-                    "date": date_obj.strftime("%d/%m/%Y") if date_obj else "Non spécifié",
-                    "lieu": lieu,
-                    "topics": topics,
-                    "lien": link,
-                    "source": "UCA",
-                    "visuel_url": ""
-                })
+                if is_future(date_obj):
+                    events.append({
+                        "titre": title,
+                        "date": date_obj.strftime("%d/%m/%Y") if date_obj else "Non spécifié",
+                        "lieu": lieu,
+                        "topics": topics,
+                        "lien": lien_final,
+                        "source": "UCA",
+                        "visuel_url": ""
+                    })
+            except Exception as e:
+                print(f"[UCA détail] Erreur: {e}")
+                
     except Exception as e:
         print(f"[UCA] Erreur: {e}")
     return events
 
 
 def scrape_usmba():
+    """Scrape USMBA."""
     events = []
     try:
         resp = requests.get(SITES[3]["url_list"], headers=HEADERS, timeout=15)
         soup = BeautifulSoup(resp.text, "html.parser")
         items = soup.find_all("div", class_=lambda c: c and ("event" in c.lower() or "post" in c.lower()) if c else False)
 
-        for item in items[:20]:
+        for item in items[:15]:
             title_tag = item.find("h3") or item.find("h4")
             if not title_tag:
                 continue
             title = get_text_safe(title_tag)
+            
+            link_tag = item.find("a", href=True)
+            lien = link_tag["href"] if link_tag else SITES[3]["url_list"]
 
             date_tag = item.find("span", class_=lambda c: c and "date" in c.lower() if c else False)
             date_str = get_text_safe(date_tag) if date_tag else ""
@@ -196,7 +225,7 @@ def scrape_usmba():
                     "date": date_obj.strftime("%d/%m/%Y") if date_obj else "Non spécifié",
                     "lieu": lieu,
                     "topics": topics,
-                    "lien": SITES[3]["url_list"],
+                    "lien": lien,
                     "source": "USMBA",
                     "visuel_url": ""
                 })
@@ -206,6 +235,7 @@ def scrape_usmba():
 
 
 def scrape_ens_umi():
+    """Scrape ENS UMI."""
     events = []
     try:
         resp = requests.get(SITES[1]["url_list"], headers=HEADERS, timeout=15)
@@ -217,6 +247,10 @@ def scrape_ens_umi():
             if not title_tag:
                 continue
             title = get_text_safe(title_tag)
+            
+            link_tag = item.find("a", href=True)
+            lien = link_tag["href"] if link_tag else SITES[1]["url_list"]
+            
             date_tag = item.find("span", class_=lambda c: c and "date" in c.lower() if c else False)
             date_str = get_text_safe(date_tag) if date_tag else ""
             date_obj = parse_date_french(date_str)
@@ -231,7 +265,7 @@ def scrape_ens_umi():
                     "date": date_obj.strftime("%d/%m/%Y") if date_obj else "Non spécifié",
                     "lieu": lieu,
                     "topics": topics,
-                    "lien": SITES[1]["url_list"],
+                    "lien": lien,
                     "source": "ENS UMI",
                     "visuel_url": ""
                 })
@@ -269,18 +303,6 @@ def export_json(events, filename="veille_congres.json"):
     print(f"✅ JSON exporté: {filename} ({len(events)} événements)")
 
 
-def export_markdown(events, filename="veille_congres.md"):
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(f"# Veille des congrès académiques — {TODAY.strftime('%d/%m/%Y')}\n\n")
-        f.write(f"**Nombre d'événements:** {len(events)}\n\n")
-        for e in events:
-            topics_str = ", ".join(e.get("topics", [])) or "Non spécifié"
-            f.write(f"## {e['titre']}\n")
-            f.write(f"📅 {e['date']} | 📍 {e['lieu']} | 🔬 {topics_str} | 🔗 [{e['source']}]({e['lien']})\n\n")
-    print(f"✅ Markdown exporté: {filename}")
-
-
 if __name__ == "__main__":
     events = run_scraping()
     export_json(events)
-    export_markdown(events)
