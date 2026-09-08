@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "titre": "Conférence Nationale sur les Sciences du Sport et la Performance",
+    "date": "20/10/2026",
+    "lieu": "Kénitra, Maroc",
+    "topics": ["Sciences du Sport", "Physiologie", "Entraînement"],
+    "lien": "https://www.uit.ac.ma",
+    "source": "UIT",
+    "visuel_url": ""
+  }
+]
