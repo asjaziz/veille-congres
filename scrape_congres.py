@@ -19,6 +19,8 @@ def parse_french_date(text):
         'avril': '04', 'mai': '05', 'juin': '06', 'juillet': '07',
         'août': '08', 'aout': '08', 'septembre': '09', 'octobre': '10',
         'novembre': '11', 'décembre': '12', 'decembre': '12'
+
+        
     }
     
     # Recherche format DD/MM/YYYY ou DD-MM-YYYY
