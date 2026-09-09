@@ -1,11 +1,14 @@
 [
   {
-    "titre": "Conférence Nationale sur les Sciences du Sport et la Performance",
-    "date": "20/10/2026",
-    "lieu": "Kénitra, Maroc",
-    "topics": ["Sciences du Sport", "Physiologie", "Entraînement"],
-    "lien": "https://www.uit.ac.ma",
-    "source": "UIT",
+    "titre": "Forum Diplomatique",
+    "date": "15/12/2026",
+    "lieu": "Fès, Maroc",
+    "topics": [
+      "Sciences",
+      "Recherche Scientifique"
+    ],
+    "lien": "http://www.usmba.ac.ma/~usmba2/forum-diplomatique/",
+    "source": "USMBA",
     "visuel_url": ""
   }
 ]
